@@ -1,4 +1,4 @@
-import {Axios} from 'axios';
+import { Axios } from 'axios';
 import parseMD from 'parse-md';
 import { MdFile, MdFileValidationResult } from './models';
 
@@ -23,7 +23,7 @@ export class MetadataReviewer {
             const fileName = file['filename'];
             const rawData = await this.getContentForFile(file['contents_url']);
             const metadata = parseMD(rawData);
-            mdFiles.push({downloadUrl: file['contents_url'], fileName, metadata: metadata['metadata']});
+            mdFiles.push({ downloadUrl: file['contents_url'], fileName, metadata: metadata['metadata'] });
         }
         return mdFiles;
     }
@@ -57,5 +57,11 @@ export class MetadataReviewer {
         return failedKeys;
     }
 
+    async submitPullRequestComment(pullRequestId: number, comment: String) {
+        const headers = { 'Accept': 'application/vnd.github.v3+json' };
+        const response = await this.axios.post(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/issues/${pullRequestId}/comments`, { body: comment }, { headers: headers });
 
+        console.log('response: ', response.data);
+
+    }
 }
