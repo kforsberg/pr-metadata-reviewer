@@ -5,9 +5,9 @@ import * as github from '@actions/github';
 import { MdFileValidationResult } from "./models";
 
 async function createCommentIfError(validationResults: MdFileValidationResult) {
-    let comment = '';
-
     if (!validationResults.hasError) return '';
+
+    let comment = '';
 
     validationResults.errors.forEach((value, key) => {
         if (comment.length > 0) {
@@ -35,7 +35,10 @@ async function run() {
 
     const comment = await createCommentIfError(validationResults);
 
-    reviewer.submitPullRequestComment(prId, comment);
+    if (comment.length > 0) {
+        reviewer.submitPullRequestReview(prId, comment);
+    }
+
 }
 
 run();
