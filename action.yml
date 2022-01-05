@@ -1,0 +1,21 @@
+name: 'Check Required Metadata'
+description: 'Decline pull request if required metadata is not present'
+branding:
+  icon: 'check-circle'
+  color: 'green'
+inputs:
+  github-token:
+    description: 'The GITHUB_TOKEN secret'
+    required: true
+  required-metadata:
+    description: 'A comma separated list of required fields'
+    required: true
+  repo-owner:
+    description: 'The repo owner'
+    required: true
+  repo-name:
+    description: 'The name of the repository'
+    required: true
+runs:
+  using: 'node12'
+  main: 'dist/index.js'
