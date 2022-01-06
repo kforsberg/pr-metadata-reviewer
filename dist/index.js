@@ -15608,8 +15608,7 @@ class MetadataReviewer {
             const headers = { 'Accept': 'application/vnd.github.v3+json' };
             const event = 'REQUEST_CHANGES';
             const body = comment;
-            const response = yield this.axios.post(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/reviews`, { event, body }, { headers: headers });
-            console.log('response: ', response.data);
+            yield this.axios.post(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/reviews`, { event, body }, { headers: headers });
         });
     }
 }
@@ -15669,26 +15668,31 @@ function createCommentIfError(validationResults) {
                 comment += '\n';
             }
             comment += `${key} is missing required metadata [${value.join(', ')}]`;
-            console.log(comment);
         });
         return comment;
     });
 }
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
-        const requiredMetadataTags = core.getInput('required-metadata', { required: true }).split(',');
-        const repoOwner = core.getInput('repo-owner', { required: true });
-        const repoName = core.getInput('repo-name', { required: true });
-        const token = core.getInput('github-token', { required: true });
-        const prId = github.context.issue.number;
-        // const requiredMetadataTags: Array<string> = ['title', 'description', 'ms.date', 'ms.topic', 'ms.prod', 'ms.custom', 'ft.audience'];
-        // const reviewer = new MetadataReviewer("kforsberg", "pr-block-test", "" /**"PERSONAL ACCESS TOKEN"**/, axios);
-        const reviewer = new MetadataReviewer_1.MetadataReviewer(repoOwner, repoName, token, axios_1.default);
-        const files = yield reviewer.getPullRequestFiles(prId);
-        const validationResults = reviewer.checkRequiredTagsForFiles(files, requiredMetadataTags);
-        const comment = yield createCommentIfError(validationResults);
-        if (comment.length > 0) {
-            reviewer.submitPullRequestReview(prId, comment);
+        try {
+            const requiredMetadataTags = core.getInput('required-metadata', { required: true }).split(',');
+            const repoOwner = core.getInput('repo-owner', { required: true });
+            const repoName = core.getInput('repo-name', { required: true });
+            const token = core.getInput('github-token', { required: true });
+            const prId = github.context.issue.number;
+            const reviewer = new MetadataReviewer_1.MetadataReviewer(repoOwner, repoName, token, axios_1.default);
+            const files = yield reviewer.getPullRequestFiles(prId);
+            const validationResults = reviewer.checkRequiredTagsForFiles(files, requiredMetadataTags);
+            const comment = yield createCommentIfError(validationResults);
+            if (comment.length > 0) {
+                reviewer.submitPullRequestReview(prId, comment);
+                core.setFailed(comment);
+            }
+        }
+        catch (error) {
+            if (error instanceof Error) {
+                core.setFailed(error.message);
+            }
         }
     });
 }

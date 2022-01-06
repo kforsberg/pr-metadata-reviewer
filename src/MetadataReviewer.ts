@@ -16,7 +16,9 @@ export class MetadataReviewer {
     }
 
     async getPullRequestFiles(pullRequestId: number): Promise<Array<MdFile>> {
-        const response = await this.axios.get(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/files`);
+        const response = await this.axios.get(
+            `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/files`
+        );
         const files: Array<any> = response.data;
         const mdFiles: Array<MdFile> = [];
 
@@ -74,12 +76,10 @@ export class MetadataReviewer {
         const event = 'REQUEST_CHANGES';
         const body = comment;
 
-        const response = await this.axios.post(
+        await this.axios.post(
             `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/reviews`,
             { event, body },
             { headers: headers }
         );
-
-        console.log('response: ', response.data);
     }
 }
