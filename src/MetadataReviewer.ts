@@ -49,8 +49,11 @@ export class MetadataReviewer {
 
         for (const file of files) {
             const validationResult = this.checkRequiredTagsForFile(file, requiredMetadataTags);
-            results.hasError = validationResult.length > 0;
-            results.errors.set(file.fileName, validationResult);
+
+            if (validationResult.length > 0) {
+                results.hasError = true;
+                results.errors.set(file.fileName, validationResult);
+            }
         }
 
         return results;

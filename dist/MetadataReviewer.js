@@ -12,6 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.MetadataReviewer = void 0;
 const parse_md_1 = __importDefault(require("parse-md"));
 class MetadataReviewer {
     constructor(repoOwner, repoName, accessToken, axios) {
@@ -27,17 +28,13 @@ class MetadataReviewer {
             const mdFiles = [];
             for (const file of files) {
                 const fileName = file['filename'];
-                console.log(fileName);
                 if (!fileName.endsWith(".md")) {
-                    console.log(fileName, "was not an md file");
                     continue;
                 }
                 const rawData = yield this.getContentForFile(file['contents_url']);
-                const metadata = parse_md_1.default(rawData);
+                const metadata = (0, parse_md_1.default)(rawData);
                 mdFiles.push({ downloadUrl: file['contents_url'], fileName, metadata: metadata['metadata'] });
             }
-            console.log("List of md files:");
-            mdFiles.map(f => console.log(f));
             return mdFiles;
         });
     }
@@ -52,8 +49,11 @@ class MetadataReviewer {
         const results = { hasError: false, errors: new Map() };
         for (const file of files) {
             const validationResult = this.checkRequiredTagsForFile(file, requiredMetadataTags);
-            results.hasError = validationResult.length > 0;
-            results.errors.set(file.fileName, validationResult);
+            console.log(`${file} validation result: ${validationResult}`);
+            if (validationResult.length > 0) {
+                results.hasError = true;
+                results.errors.set(file.fileName, validationResult);
+            }
         }
         return results;
     }
@@ -74,8 +74,7 @@ class MetadataReviewer {
             const headers = { 'Accept': 'application/vnd.github.v3+json' };
             const event = 'REQUEST_CHANGES';
             const body = comment;
-            const response = yield this.axios.post(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/reviews`, { event, body }, { headers: headers });
-            console.log('response: ', response.data);
+            yield this.axios.post(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/reviews`, { event, body }, { headers: headers });
         });
     }
 }
