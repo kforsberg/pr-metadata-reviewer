@@ -21,7 +21,7 @@ async function createCommentIfError(validationResults: MdFileValidationResult) {
 }
 
 async function run() {
-    const prId = 1;
+    const prId = 2;
     // const repoOwner = core.getInput('repo-owner', { required: true });
     // const repoName = core.getInput('repo-name', { required: true });
     // const token = core.getInput('github-token', { required: true });
