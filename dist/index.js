@@ -15552,15 +15552,17 @@ Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.MetadataReviewer = void 0;
 const parse_md_1 = __importDefault(__nccwpck_require__(9258));
 class MetadataReviewer {
-    constructor(repoOwner, repoName, accessToken, axios) {
+    constructor(repoOwner, repoName, accessToken, axios, prId) {
         this.repoOwner = repoOwner;
         this.repoName = repoName;
         this.axios = axios;
         this.axios.defaults.headers.common['Authorization'] = `Token ${accessToken}`;
+        this.baseUrl = `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${prId}`;
+        this.prId = prId;
     }
-    getPullRequestFiles(pullRequestId) {
+    getPullRequestFiles() {
         return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this.axios.get(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/files`);
+            const response = yield this.axios.get(`${this.baseUrl}/files`);
             const files = response.data;
             const mdFiles = [];
             for (const file of files) {
@@ -15605,12 +15607,36 @@ class MetadataReviewer {
         }
         return failedKeys;
     }
-    submitPullRequestReview(pullRequestId, comment) {
+    submitPullRequestReview(comment) {
         return __awaiter(this, void 0, void 0, function* () {
             const headers = { 'Accept': 'application/vnd.github.v3+json' };
             const event = 'REQUEST_CHANGES';
             const body = comment;
-            yield this.axios.post(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/reviews`, { event, body }, { headers: headers });
+            yield this.axios.post(`${this.baseUrl}/reviews`, JSON.stringify({ event, body }), { headers });
+        });
+    }
+    dismissPullRequestReviews(reviewIds) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const headers = { 'Accept': 'application/vnd.github.v3+json' };
+            yield Promise.all(reviewIds.map((id) => __awaiter(this, void 0, void 0, function* () {
+                return yield this.axios.put(`${this.baseUrl}/reviews/${id}/dismissals`, JSON.stringify({ message: 'Metadata was missing but corrected' }), { headers });
+            })));
+        });
+    }
+    getRequestReviewIds() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const headers = { 'Accept': 'application/vnd.github.v3+json' };
+            const response = yield this.axios.get(`${this.baseUrl}/reviews`, { headers });
+            const reviews = response.data;
+            let ids = [];
+            // @ts-ignore
+            reviews.map(review => {
+                if (review.body.includes("missing required metadata") &&
+                    review.user.login.includes("github-actions[bot]")) {
+                    ids.push(review.id);
+                }
+            });
+            return ids;
         });
     }
 }
@@ -15682,13 +15708,19 @@ function run() {
             const repoName = core.getInput('repo-name', { required: true });
             const token = core.getInput('github-token', { required: true });
             const prId = github.context.issue.number;
-            const reviewer = new MetadataReviewer_1.MetadataReviewer(repoOwner, repoName, token, axios_1.default);
-            const files = yield reviewer.getPullRequestFiles(prId);
+            const reviewer = new MetadataReviewer_1.MetadataReviewer(repoOwner, repoName, token, axios_1.default, prId);
+            const files = yield reviewer.getPullRequestFiles();
             const validationResults = reviewer.checkRequiredTagsForFiles(files, requiredMetadataTags);
             const comment = yield createCommentIfError(validationResults);
             if (comment.length > 0) {
-                reviewer.submitPullRequestReview(prId, comment);
+                yield reviewer.submitPullRequestReview(comment);
                 core.setFailed(comment);
+            }
+            else {
+                const metaReviewIds = yield reviewer.getRequestReviewIds();
+                if (metaReviewIds.length > 0) {
+                    yield reviewer.dismissPullRequestReviews(metaReviewIds);
+                }
             }
         }
         catch (error) {

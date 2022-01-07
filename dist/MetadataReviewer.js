@@ -15,15 +15,17 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetadataReviewer = void 0;
 const parse_md_1 = __importDefault(require("parse-md"));
 class MetadataReviewer {
-    constructor(repoOwner, repoName, accessToken, axios) {
+    constructor(repoOwner, repoName, accessToken, axios, prId) {
         this.repoOwner = repoOwner;
         this.repoName = repoName;
         this.axios = axios;
         this.axios.defaults.headers.common['Authorization'] = `Token ${accessToken}`;
+        this.baseUrl = `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${prId}`;
+        this.prId = prId;
     }
     getPullRequestFiles(pullRequestId) {
         return __awaiter(this, void 0, void 0, function* () {
-            const response = yield this.axios.get(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/files`);
+            const response = yield this.axios.get(`${this.baseUrl}/files`);
             const files = response.data;
             const mdFiles = [];
             for (const file of files) {
@@ -49,7 +51,6 @@ class MetadataReviewer {
         const results = { hasError: false, errors: new Map() };
         for (const file of files) {
             const validationResult = this.checkRequiredTagsForFile(file, requiredMetadataTags);
-            console.log(`${file} validation result: ${validationResult}`);
             if (validationResult.length > 0) {
                 results.hasError = true;
                 results.errors.set(file.fileName, validationResult);
@@ -74,7 +75,43 @@ class MetadataReviewer {
             const headers = { 'Accept': 'application/vnd.github.v3+json' };
             const event = 'REQUEST_CHANGES';
             const body = comment;
-            yield this.axios.post(`https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${pullRequestId}/reviews`, { event, body }, { headers: headers });
+            yield this.axios.post(`${this.baseUrl}/reviews`, JSON.stringify({ event, body }), { headers });
+        });
+    }
+    approvePullRequestReviews(pullRequestId, reviewIds) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const headers = { 'Accept': 'application/vnd.github.v3+json' };
+            const event = 'APPROVE';
+            // const response = await Promise.all(reviewIds.map(async (id) => await this.axios.post(
+            //     `${this.baseUrl}/reviews/${id}/events`,
+            //     { event },
+            //     { headers: headers }
+            // )));
+            console.log(`${this.baseUrl}/reviews/${reviewIds[3]}/events`);
+            try {
+                const response = yield this.axios.put(`${this.baseUrl}/reviews/${reviewIds[3]}/dismissals`, JSON.stringify({ message: 'Metadata was corrected' }), { headers });
+                console.log(response);
+            }
+            catch (error) {
+                if (error instanceof Error) {
+                    console.log(error);
+                }
+            }
+        });
+    }
+    getRequestReviewIds(pullRequestId) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const headers = { 'Accept': 'application/vnd.github.v3+json' };
+            const response = yield this.axios.get(`${this.baseUrl}/reviews`, { headers });
+            const reviews = response.data;
+            let ids = [];
+            // @ts-ignore
+            reviews.map(review => {
+                if (review.body.includes("missing required metadata") && review.user.login.includes("github-actions[bot]")) {
+                    ids.push(review.id);
+                }
+            });
+            return ids;
         });
     }
 }

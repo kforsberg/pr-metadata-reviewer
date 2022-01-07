@@ -27,22 +27,27 @@ async function run() {
         const token = core.getInput('github-token', { required: true });
         const prId = github.context.issue.number;
 
-        const reviewer = new MetadataReviewer(repoOwner, repoName, token, axios);
-        const files = await reviewer.getPullRequestFiles(prId);
+        const reviewer = new MetadataReviewer(repoOwner, repoName, token, axios, prId);
+        const files = await reviewer.getPullRequestFiles();
         const validationResults = reviewer.checkRequiredTagsForFiles(files, requiredMetadataTags);
         const comment = await createCommentIfError(validationResults);
 
         if (comment.length > 0) {
-            reviewer.submitPullRequestReview(prId, comment);
+            await reviewer.submitPullRequestReview(comment);
 
             core.setFailed(comment);
+        } else {
+            const metaReviewIds = await reviewer.getRequestReviewIds();
+
+            if (metaReviewIds.length > 0) {
+                await reviewer.dismissPullRequestReviews(metaReviewIds);
+            }
         }
     } catch (error) {
         if (error instanceof Error) {
             core.setFailed(error.message);
         }
     }
-
 }
 
 run();
