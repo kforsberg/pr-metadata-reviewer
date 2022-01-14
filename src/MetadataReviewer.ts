@@ -1,27 +1,23 @@
-import { Axios } from 'axios';
-import parseMD from 'parse-md';
+import { IGuthubService } from './GithubService';
 import { MdFile, MdFileValidationResult } from './models';
 
-export class MetadataReviewer {
+export interface IMetadataService {
+    getPullRequestFiles: () => Promise<Array<MdFile>>
+    checkRequiredTagsForFiles: (files: Array<MdFile>, requiredMetadataTags: Array<string>) => MdFileValidationResult
+}
 
-    axios: Axios;
-    repoOwner: string;
-    repoName: string;
-    baseUrl: string;
-    prId: number;
+export class MetadataService implements IMetadataService {
 
-    constructor(repoOwner: string, repoName: string, accessToken: string, axios: Axios, prId: number) {
-        this.repoOwner = repoOwner;
-        this.repoName = repoName;
-        this.axios = axios;
-        this.axios.defaults.headers.common['Authorization'] = `Token ${accessToken}`;
-        this.baseUrl = `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${prId}`;
-        this.prId = prId;
+    githubService: IGuthubService;
+    parseMd: any;
+
+    constructor(githubService: IGuthubService, parseMd: any) {
+        this.githubService = githubService;
+        this.parseMd = parseMd;
     }
 
     async getPullRequestFiles(): Promise<Array<MdFile>> {
-        const response = await this.axios.get(`${this.baseUrl}/files`);
-        const files: Array<any> = response.data;
+        const files = await this.githubService.getPullRequestFiles();
         const mdFiles: Array<MdFile> = [];
 
         for (const file of files) {
@@ -31,19 +27,12 @@ export class MetadataReviewer {
                 continue;
             }
 
-            const rawData = await this.getContentForFile(file['contents_url']);
-            const metadata = parseMD(rawData);
+            const rawData = await this.githubService.getFileContent(file['contents_url']);
+            const metadata = this.parseMd(rawData);
             mdFiles.push({ downloadUrl: file['contents_url'], fileName, metadata: metadata['metadata'] });
         }
 
         return mdFiles;
-    }
-
-    private async getContentForFile(file: string) {
-        const response = await this.axios.get(file);
-        const data = await this.axios.get(response.data['download_url']);
-
-        return data.data;
     }
 
     checkRequiredTagsForFiles(files: Array<MdFile>, requiredMetadataTags: Array<string>): MdFileValidationResult {
@@ -74,48 +63,5 @@ export class MetadataReviewer {
         }
 
         return failedKeys;
-    }
-
-    async submitPullRequestReview(comment: String) {
-        const headers = { 'Accept': 'application/vnd.github.v3+json' };
-        const event = 'REQUEST_CHANGES';
-        const body = comment;
-
-        await this.axios.post(
-            `${this.baseUrl}/reviews`,
-            JSON.stringify({ event, body }),
-            { headers }
-        );
-    }
-
-    async dismissPullRequestReviews(reviewIds: Array<number>) {
-        const headers = { 'Accept': 'application/vnd.github.v3+json' };
-
-        await Promise.all(reviewIds.map(async (id) => await this.axios.put(
-            `${this.baseUrl}/reviews/${id}/dismissals`,
-            JSON.stringify({ message: 'Metadata was missing but corrected' }),
-            { headers }
-        )));
-
-    }
-
-    async getRequestReviewIds() {
-        const headers = { 'Accept': 'application/vnd.github.v3+json' };
-        const response = await this.axios.get(
-            `${this.baseUrl}/reviews`,
-            { headers }
-        );
-        const reviews = response.data;
-        let ids: Array<number> = [];
-
-        // @ts-ignore
-        reviews.map(review => {
-            if (review.body.includes("missing required metadata") &&
-                review.user.login.includes("github-actions[bot]")) {
-                ids.push(review.id);
-            }
-        })
-
-        return ids;
     }
 }

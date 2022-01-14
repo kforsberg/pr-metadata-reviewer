@@ -1,8 +1,10 @@
-import { MetadataReviewer } from "./MetadataReviewer";
+import { IMetadataService, MetadataService } from "./MetadataReviewer";
+import { IGuthubService, GithubService } from './GithubService';
 import axios from 'axios';
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { MdFileValidationResult } from "./models";
+import parseMD from 'parse-md';
 
 async function createCommentIfError(validationResults: MdFileValidationResult) {
     if (!validationResults.hasError) return '';
@@ -27,20 +29,21 @@ async function run() {
         const token = core.getInput('github-token', { required: true });
         const prId = github.context.issue.number;
 
-        const reviewer = new MetadataReviewer(repoOwner, repoName, token, axios, prId);
+        const githubService: IGuthubService = new GithubService(repoOwner, repoName, token, axios, prId);
+        const reviewer: IMetadataService = new MetadataService(githubService, parseMD);
         const files = await reviewer.getPullRequestFiles();
         const validationResults = reviewer.checkRequiredTagsForFiles(files, requiredMetadataTags);
         const comment = await createCommentIfError(validationResults);
 
         if (comment.length > 0) {
-            await reviewer.submitPullRequestReview(comment);
+            await githubService.submitPullRequestReview(comment);
 
             core.setFailed(comment);
         } else {
-            const metaReviewIds = await reviewer.getRequestReviewIds();
+            const metaReviewIds = await githubService.getRequestReviewIds();
 
             if (metaReviewIds.length > 0) {
-                await reviewer.dismissPullRequestReviews(metaReviewIds);
+                await githubService.dismissPullRequestReviews(metaReviewIds);
             }
         }
     } catch (error) {
