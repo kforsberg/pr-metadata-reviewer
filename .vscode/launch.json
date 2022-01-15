@@ -16,6 +16,15 @@
             "outFiles": [
                 "${workspaceFolder}/**/*.js"
             ]
-        }
+        },
+        {
+            "type": "node", 
+            "request": "launch", 
+            "name": "Jasmine Current File", 
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run","test"],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
+          }
     ]
 }
