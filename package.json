@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "ncc build src/index.ts",
+    "build": "npm run test && ncc build src/index.ts",
     "test": "ts-node node_modules/jasmine/bin/jasmine"
   },
   "devDependencies": {

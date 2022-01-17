@@ -9,8 +9,8 @@ export interface IGuthubService {
 }
 
 export class GithubService implements IGuthubService {
-    baseUrl: string;
-    axios: Axios;
+    private baseUrl: string;
+    private axios: Axios;
 
     constructor(repoOwner: string, repoName: string, accessToken: string, axios: Axios, prId: number) {
         this.axios = axios;
