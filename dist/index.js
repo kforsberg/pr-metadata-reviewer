@@ -15723,6 +15723,9 @@ function run() {
             if (error instanceof Error) {
                 core.setFailed(error.message);
             }
+            else if (typeof error === 'string') {
+                core.setFailed(error);
+            }
         }
     });
 }
