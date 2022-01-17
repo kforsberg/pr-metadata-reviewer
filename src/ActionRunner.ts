@@ -1,5 +1,5 @@
 import { IGuthubService } from "./GithubService";
-import { IMetadataService } from "./MetadataReviewer";
+import { IMetadataService } from "./MetadataService";
 import { MdFileValidationResult } from "./models";
 
 export interface IActionRunner {

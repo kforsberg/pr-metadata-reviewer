@@ -1,4 +1,4 @@
-import { IMetadataService, MetadataService } from "./MetadataReviewer";
+import { IMetadataService, MetadataService } from "./MetadataService";
 import { IGuthubService, GithubService } from './GithubService';
 import axios from 'axios';
 import * as core from '@actions/core';

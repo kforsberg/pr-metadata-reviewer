@@ -1,4 +1,4 @@
-import { IMetadataService, MetadataService } from '../src/MetadataReviewer'
+import { IMetadataService, MetadataService } from '../src/MetadataService'
 import { IGuthubService, GithubService } from '../src/GithubService'
 import axios, { Axios } from 'axios';
 import { MdFile } from '../src/models';
