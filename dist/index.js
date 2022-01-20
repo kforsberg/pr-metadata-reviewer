@@ -6839,9 +6839,9 @@ RedirectableRequest.prototype._processResponse = function (response) {
     var redirectUrlParts = url.parse(redirectUrl);
     Object.assign(this._options, redirectUrlParts);
 
-    // Drop the Authorization header if redirecting to another domain
+    // Drop the confidential headers when redirecting to another domain
     if (!(redirectUrlParts.host === currentHost || isSubdomainOf(redirectUrlParts.host, currentHost))) {
-      removeMatchingHeaders(/^authorization$/i, this._options.headers);
+      removeMatchingHeaders(/^(?:authorization|cookie)$/i, this._options.headers);
     }
 
     // Evaluate the beforeRedirect callback
@@ -12959,70 +12959,6 @@ function onceStrict (fn) {
 
 /***/ }),
 
-/***/ 9258:
-/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
-
-"use strict";
-
-
-Object.defineProperty(exports, "__esModule", ({ value: true }));
-
-var jsYaml = __nccwpck_require__(1917);
-
-var findMetadataIndices = function findMetadataIndices(mem, item, i) {
-  if (/^---/.test(item)) {
-    mem.push(i);
-  }
-
-  return mem;
-};
-
-var parseMetadata = function parseMetadata(_ref) {
-  var lines = _ref.lines,
-      metadataIndices = _ref.metadataIndices;
-
-  if (metadataIndices.length > 0) {
-    var metadata = lines.slice(metadataIndices[0] + 1, metadataIndices[1]);
-    return jsYaml.safeLoad(metadata.join('\n'));
-  }
-
-  return {};
-};
-
-var parseContent = function parseContent(_ref2) {
-  var lines = _ref2.lines,
-      metadataIndices = _ref2.metadataIndices;
-
-  if (metadataIndices.length > 0) {
-    lines = lines.slice(metadataIndices[1] + 1, lines.length);
-  }
-
-  return lines.join('\n');
-};
-
-var parseMD = function parseMD(contents) {
-  var lines = contents.split('\n');
-  var metadataIndices = lines.reduce(findMetadataIndices, []);
-  var metadata = parseMetadata({
-    lines: lines,
-    metadataIndices: metadataIndices
-  });
-  var content = parseContent({
-    lines: lines,
-    metadataIndices: metadataIndices
-  });
-  return {
-    metadata: metadata,
-    content: content
-  };
-};
-
-exports["default"] = parseMD;
-//# sourceMappingURL=index.js.map
-
-
-/***/ }),
-
 /***/ 4256:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
@@ -15531,8 +15467,8 @@ function wrappy (fn, cb) {
 
 /***/ }),
 
-/***/ 3427:
-/***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
+/***/ 5956:
+/***/ (function(__unused_webpack_module, exports) {
 
 "use strict";
 
@@ -15545,67 +15481,82 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
         step((generator = generator.apply(thisArg, _arguments || [])).next());
     });
 };
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.ActionRunner = void 0;
+class ActionRunner {
+    constructor(metadataService, githubService) {
+        this.metadataService = metadataService;
+        this.githubService = githubService;
+    }
+    runAction(requiredMetadataTags) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const files = yield this.metadataService.getPullRequestFiles();
+            const validationResults = this.metadataService.checkRequiredTagsForFiles(files, requiredMetadataTags);
+            const comment = this.createCommentIfError(validationResults);
+            if (comment.length > 0) {
+                yield this.githubService.submitPullRequestReview(comment);
+                throw comment;
+            }
+            else {
+                const metaReviewIds = yield this.githubService.getRequestReviewIds();
+                if (metaReviewIds.length > 0) {
+                    yield this.githubService.dismissPullRequestReviews(metaReviewIds);
+                }
+            }
+        });
+    }
+    createCommentIfError(validationResults) {
+        if (!validationResults.hasError)
+            return '';
+        let comment = '';
+        validationResults.errors.forEach((value, key) => {
+            if (comment.length > 0) {
+                comment += '\n';
+            }
+            comment += `${key} is missing required metadata [${value.join(', ')}]`;
+        });
+        return comment;
+    }
+}
+exports.ActionRunner = ActionRunner;
+
+
+/***/ }),
+
+/***/ 4188:
+/***/ (function(__unused_webpack_module, exports) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-exports.MetadataReviewer = void 0;
-const parse_md_1 = __importDefault(__nccwpck_require__(9258));
-class MetadataReviewer {
+exports.GithubService = void 0;
+class GithubService {
     constructor(repoOwner, repoName, accessToken, axios, prId) {
-        this.repoOwner = repoOwner;
-        this.repoName = repoName;
         this.axios = axios;
         this.axios.defaults.headers.common['Authorization'] = `Token ${accessToken}`;
-        this.baseUrl = `https://api.github.com/repos/${this.repoOwner}/${this.repoName}/pulls/${prId}`;
-        this.prId = prId;
+        this.baseUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/pulls/${prId}`;
     }
     getPullRequestFiles() {
         return __awaiter(this, void 0, void 0, function* () {
             const response = yield this.axios.get(`${this.baseUrl}/files`);
-            const files = response.data;
-            const mdFiles = [];
-            for (const file of files) {
-                const fileName = file['filename'];
-                if (!fileName.endsWith(".md")) {
-                    continue;
-                }
-                const rawData = yield this.getContentForFile(file['contents_url']);
-                const metadata = (0, parse_md_1.default)(rawData);
-                mdFiles.push({ downloadUrl: file['contents_url'], fileName, metadata: metadata['metadata'] });
-            }
-            return mdFiles;
+            return response.data;
         });
     }
-    getContentForFile(file) {
+    getFileContent(file) {
         return __awaiter(this, void 0, void 0, function* () {
             const response = yield this.axios.get(file);
             const data = yield this.axios.get(response.data['download_url']);
             return data.data;
         });
-    }
-    checkRequiredTagsForFiles(files, requiredMetadataTags) {
-        const results = { hasError: false, errors: new Map() };
-        for (const file of files) {
-            const validationResult = this.checkRequiredTagsForFile(file, requiredMetadataTags);
-            if (validationResult.length > 0) {
-                results.hasError = true;
-                results.errors.set(file.fileName, validationResult);
-            }
-        }
-        return results;
-    }
-    checkRequiredTagsForFile(file, requiredMetadataTags) {
-        const allKeys = Object.keys(file.metadata);
-        const failedKeys = [];
-        for (const requiredTag of requiredMetadataTags) {
-            // check that the key exists in the MD file and that they're not empty
-            if (!allKeys.includes(requiredTag) || (file.metadata[requiredTag] === '' || file.metadata[requiredTag] === null)) {
-                failedKeys.push(requiredTag);
-                continue;
-            }
-        }
-        return failedKeys;
     }
     submitPullRequestReview(comment) {
         return __awaiter(this, void 0, void 0, function* () {
@@ -15640,7 +15591,73 @@ class MetadataReviewer {
         });
     }
 }
-exports.MetadataReviewer = MetadataReviewer;
+exports.GithubService = GithubService;
+
+
+/***/ }),
+
+/***/ 2028:
+/***/ (function(__unused_webpack_module, exports) {
+
+"use strict";
+
+var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
+    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
+    return new (P || (P = Promise))(function (resolve, reject) {
+        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
+        function rejected(value) { try { step(generator["throw"](value)); } catch (e) { reject(e); } }
+        function step(result) { result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected); }
+        step((generator = generator.apply(thisArg, _arguments || [])).next());
+    });
+};
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+exports.MetadataService = void 0;
+class MetadataService {
+    constructor(githubService, parseMd) {
+        this.githubService = githubService;
+        this.parseMd = parseMd;
+    }
+    getPullRequestFiles() {
+        return __awaiter(this, void 0, void 0, function* () {
+            const files = yield this.githubService.getPullRequestFiles();
+            const mdFiles = [];
+            for (const file of files) {
+                const fileName = file['filename'];
+                if (!fileName.endsWith(".md")) {
+                    continue;
+                }
+                const rawData = yield this.githubService.getFileContent(file['contents_url']);
+                const metadata = this.parseMd(rawData);
+                mdFiles.push({ downloadUrl: file['contents_url'], fileName, metadata: metadata['metadata'] });
+            }
+            return mdFiles;
+        });
+    }
+    checkRequiredTagsForFiles(files, requiredMetadataTags) {
+        const results = { hasError: false, errors: new Map() };
+        for (const file of files) {
+            const validationResult = this.checkRequiredTagsForFile(file, requiredMetadataTags);
+            if (validationResult.length > 0) {
+                results.hasError = true;
+                results.errors.set(file.fileName, validationResult);
+            }
+        }
+        return results;
+    }
+    checkRequiredTagsForFile(file, requiredMetadataTags) {
+        const allKeys = Object.keys(file.metadata);
+        const failedKeys = [];
+        for (const requiredTag of requiredMetadataTags) {
+            // check that the key exists in the MD file and that they're not empty
+            if (!allKeys.includes(requiredTag) || (file.metadata[requiredTag] === '' || file.metadata[requiredTag] === null)) {
+                failedKeys.push(requiredTag);
+                continue;
+            }
+        }
+        return failedKeys;
+    }
+}
+exports.MetadataService = MetadataService;
 
 
 /***/ }),
@@ -15682,24 +15699,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
-const MetadataReviewer_1 = __nccwpck_require__(3427);
+const MetadataService_1 = __nccwpck_require__(2028);
+const GithubService_1 = __nccwpck_require__(4188);
 const axios_1 = __importDefault(__nccwpck_require__(6545));
 const core = __importStar(__nccwpck_require__(2186));
 const github = __importStar(__nccwpck_require__(5438));
-function createCommentIfError(validationResults) {
-    return __awaiter(this, void 0, void 0, function* () {
-        if (!validationResults.hasError)
-            return '';
-        let comment = '';
-        validationResults.errors.forEach((value, key) => {
-            if (comment.length > 0) {
-                comment += '\n';
-            }
-            comment += `${key} is missing required metadata [${value.join(', ')}]`;
-        });
-        return comment;
-    });
-}
+const parse_md_1 = __importDefault(__nccwpck_require__(1342));
+const ActionRunner_1 = __nccwpck_require__(5956);
 function run() {
     return __awaiter(this, void 0, void 0, function* () {
         try {
@@ -15708,24 +15714,17 @@ function run() {
             const repoName = core.getInput('repo-name', { required: true });
             const token = core.getInput('github-token', { required: true });
             const prId = github.context.issue.number;
-            const reviewer = new MetadataReviewer_1.MetadataReviewer(repoOwner, repoName, token, axios_1.default, prId);
-            const files = yield reviewer.getPullRequestFiles();
-            const validationResults = reviewer.checkRequiredTagsForFiles(files, requiredMetadataTags);
-            const comment = yield createCommentIfError(validationResults);
-            if (comment.length > 0) {
-                yield reviewer.submitPullRequestReview(comment);
-                core.setFailed(comment);
-            }
-            else {
-                const metaReviewIds = yield reviewer.getRequestReviewIds();
-                if (metaReviewIds.length > 0) {
-                    yield reviewer.dismissPullRequestReviews(metaReviewIds);
-                }
-            }
+            const githubService = new GithubService_1.GithubService(repoOwner, repoName, token, axios_1.default, prId);
+            const metadataService = new MetadataService_1.MetadataService(githubService, parse_md_1.default);
+            const runner = new ActionRunner_1.ActionRunner(metadataService, githubService);
+            yield runner.runAction(requiredMetadataTags);
         }
         catch (error) {
             if (error instanceof Error) {
                 core.setFailed(error.message);
+            }
+            else if (typeof error === 'string') {
+                core.setFailed(error);
             }
         }
     });
@@ -15860,6 +15859,76 @@ module.exports = require("util");
 
 "use strict";
 module.exports = require("zlib");
+
+/***/ }),
+
+/***/ 1342:
+/***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
+
+"use strict";
+
+
+Object.defineProperty(exports, "__esModule", ({ value: true }));
+
+function _interopDefault (ex) { return (ex && (typeof ex === 'object') && 'default' in ex) ? ex['default'] : ex; }
+
+var jsYaml = _interopDefault(__nccwpck_require__(1917));
+
+// destructure CommonJS modules at import time
+
+var safeLoad = jsYaml.safeLoad;
+
+var findMetadataIndices = function findMetadataIndices(mem, item, i) {
+  if (/^---/.test(item)) {
+    mem.push(i);
+  }
+
+  return mem;
+};
+
+var parseMetadata = function parseMetadata(_ref) {
+  var lines = _ref.lines,
+      metadataIndices = _ref.metadataIndices;
+
+  if (metadataIndices.length > 0) {
+    var metadata = lines.slice(metadataIndices[0] + 1, metadataIndices[1]);
+    return safeLoad(metadata.join('\n'));
+  }
+
+  return {};
+};
+
+var parseContent = function parseContent(_ref2) {
+  var lines = _ref2.lines,
+      metadataIndices = _ref2.metadataIndices;
+
+  if (metadataIndices.length > 0) {
+    lines = lines.slice(metadataIndices[1] + 1, lines.length);
+  }
+
+  return lines.join('\n');
+};
+
+var parseMD = function parseMD(contents) {
+  var lines = contents.split('\n');
+  var metadataIndices = lines.reduce(findMetadataIndices, []);
+  var metadata = parseMetadata({
+    lines: lines,
+    metadataIndices: metadataIndices
+  });
+  var content = parseContent({
+    lines: lines,
+    metadataIndices: metadataIndices
+  });
+  return {
+    metadata: metadata,
+    content: content
+  };
+};
+
+exports["default"] = parseMD;
+//# sourceMappingURL=index.cjs.map
+
 
 /***/ }),
 
